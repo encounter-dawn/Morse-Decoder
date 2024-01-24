@@ -1,0 +1,116 @@
+import wave
+import math
+import tkinter as tk
+from tkinter import filedialog
+from tkinter import messagebox
+import pylab as pl
+import numpy as np
+import pydub
+from pydub import AudioSegment
+
+morse_dict = {
+    '.-': 'A', '-...': 'B', '-.-.': 'C', '-..': 'D', '.': 'E', '..-.': 'F',
+    '--.': 'G', '....': 'H', '..': 'I', '.---': 'J', '-.-': 'K', '.-..': 'L',
+    '--': 'M', '-.': 'N', '---': 'O', '.--.': 'P', '--.-': 'Q', '.-.': 'R',
+    '...': 'S', '-': 'T', '..-': 'U', '...-': 'V', '.--': 'W', '-..-': 'X',
+    '-.--': 'Y', '--..': 'Z',
+
+    '.----': '1', '..---': '2', '...--': '3', '....-': '4', '.....': '5',
+    '-....': '6', '--...': '7', '---..': '8', '----.': '9', '-----': '0',
+
+    '.__._': '.', '-.-..-..': ':', '--..--': ',', '-.-.-.': ';', '..--..': '?',
+    '-...-': '=', '.----.': '\'', '-..-.': '/', '-.-.--': '!', '-....-': '-',
+    '..--.-': '_', '.-..-.': '"', '-.--.': '(', '-.--.-': ')', '...-..-': '$',
+    '.-...': '&', '.--.-.': '@'
+}
+
+def choose_file():
+    file_path = filedialog.askopenfilename()
+    return file_path
+
+def decode_morse():
+    try:
+        # 选择要解码的音频文件
+        file_path = choose_file()
+        if not file_path:
+            return
+        
+        # 执行音频解码
+        f = wave.open(file_path)
+        params = f.getparams()
+        nchannels, sampwidth, framerate, nframes = params[:4]
+        str_data = f.readframes(nframes)
+        wave_data = np.frombuffer(str_data, dtype=np.ushort).T
+        wave_avg = int(sum([abs(x/10) for x in wave_data]) / len(wave_data)) * 10
+        morse_block_sum = 0
+        morse_block_length = 0
+        morse_arr = []
+        time_arr = []
+
+        for i in wave_data:
+            if abs(i) > wave_avg:
+                morse_block_sum += 1
+            else:
+                morse_block_sum += 0
+            morse_block_length += 1
+
+            if morse_block_length == 50:
+                if morse_block_sum / 50 > 0.3:
+                    morse_arr.append(1)
+                else:
+                    morse_arr.append(0)
+                time_arr.append(len(time_arr))
+                morse_block_length = 0
+                morse_block_sum = 0
+
+        pl.plot(time_arr, morse_arr)
+        pl.savefig('result.png')
+        pl.close()
+
+        morse_type = []
+        morse_len = []
+        morse_obj_sum = [0, 0]
+        morse_obj_len = [0, 0]
+        for i in morse_arr:
+            if len(morse_type) == 0 or morse_type[len(morse_type) - 1] != i:
+                morse_obj_len[i] += 1
+                morse_obj_sum[i] += 1
+                morse_type.append(i)
+                morse_len.append(1)
+            else:
+                morse_obj_sum[i] += 1
+                morse_len[len(morse_type) - 1] += 1
+        morse_block_avg = morse_obj_sum[1] / morse_obj_len[1]
+        morse_blank_avg = morse_obj_sum[0] / morse_obj_len[0]
+
+        morse_result = ""
+        for i in range(len(morse_type)):
+            if morse_type[i] == 1:
+                if morse_len[i] > morse_block_avg:
+                    morse_result += "-"
+                elif morse_len[i] < morse_block_avg:
+                    morse_result += "."
+            elif morse_type[i] == 0:
+                if morse_len[i] > morse_blank_avg:
+                    morse_result += "/"
+
+        morse_array = morse_result.split("/")
+        plain_text = ""
+        for morse in morse_array:
+            if morse != '':
+                plain_text += morse_dict[morse]
+
+        messagebox.showinfo("Decoded Text", plain_text)
+    
+    except Exception as e:
+        messagebox.showerror("Error", str(e))
+
+window = tk.Tk()
+window.geometry("800x600")
+window.title("Morse Decoder")
+
+button = tk.Button(window, text="Upload Morse-audio ",width=20, command=decode_morse)
+button.pack(pady=10, padx=300, ipadx=10, ipady=5, side=tk.LEFT)
+button.pack()
+
+window.mainloop()
